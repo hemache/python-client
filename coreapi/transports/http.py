@@ -99,9 +99,14 @@ def _get_params(method, encoding, fields, params=None):
     if params is None:
         return empty_params
 
+    # Collect path related variables
+    path = {
+        field.name: utils.validate_path_param(params[field.name])
+        for field in fields if field.location == 'path'
+    }
+    fields = [field for field in fields if field.location != 'path']
     field_map = {field.name: field for field in fields}
 
-    path = {}
     query = {}
     data = {}
     files = {}
@@ -113,6 +118,10 @@ def _get_params(method, encoding, fields, params=None):
     seen_body = False
 
     for key, value in params.items():
+        # Skip the value if we have it in the path only
+        if key in path.keys() and key not in field_map:
+            continue
+
         if key not in field_map or not field_map[key].location:
             # Default is 'query' for 'GET' and 'DELETE', and 'form' for others.
             location = 'query' if method in ('GET', 'DELETE') else 'form'
@@ -124,9 +133,7 @@ def _get_params(method, encoding, fields, params=None):
             location = 'body'
 
         try:
-            if location == 'path':
-                path[key] = utils.validate_path_param(value)
-            elif location == 'query':
+            if location == 'query':
                 query[key] = utils.validate_query_param(value)
             elif location == 'body':
                 data = utils.validate_body_param(value, encoding=encoding)
